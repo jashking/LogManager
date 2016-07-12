@@ -1,0 +1,25 @@
+{
+	"FileVersion" : 3,
+	"Version" : 1,
+	"VersionName" : "1.0",
+	"FriendlyName" : "Log Manager",
+	"Description" : "Creates a log folder to hold all log files when game starts. Adds filters to log to separate file. Makes it easier to track the log messages of a specific category!",
+	"Category" : "",
+	"CreatedBy" : "Wang Jie(newzeadev@gmail.com)",
+	"CreatedByURL" : "http://wangjie.rocks",
+	"DocsURL" : "http://wangjie.rocks",
+	"MarketplaceURL" : "",
+	"SupportURL" : "http://wangjie.rocks",
+	"EnabledByDefault" : false,
+	"CanContainContent" : false,
+	"IsBetaVersion" : false,
+	"Installed" : false,
+	"Modules" :
+	[
+		{
+			"Name" : "LogManager",
+			"Type" : "Runtime",
+			"LoadingPhase" : "PostConfigInit"
+		}
+	]
+}
