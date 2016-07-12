@@ -34,7 +34,7 @@ A plugin to manage logs for Unrealengine4
 	``` cpp
 	#include "ILogManager.h"
 
-	if (ILogManager::Get().IsAvailable())
+	if (ILogManager::IsAvailable())
     {
 		// 保留最近的5个日志文件夹
         ILogManager::Get().CleanLogFolder(5);
