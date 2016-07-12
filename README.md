@@ -14,10 +14,12 @@ A plugin to manage logs for Unrealengine4
 ### 使用 ###
 
 * 将插件代码复制到项目的 `Plugins` 目录下，并在编辑器中刷新 `Visual Studio` 工程，如图：
-	！[](http://7xqxmb.com1.z0.glb.clouddn.com/blog/images/copy_src.png)
+
+	![](http://7xqxmb.com1.z0.glb.clouddn.com/blog/images/copy_src.png)
 
 * 在项目的编译规则中，加入插件依赖，如图：
-	！[](http://7xqxmb.com1.z0.glb.clouddn.com/blog/images/add_reference.png)
+
+	![](http://7xqxmb.com1.z0.glb.clouddn.com/blog/images/add_reference.png)
 
 * 增加一个日志分类
 	``` cpp
@@ -48,8 +50,9 @@ A plugin to manage logs for Unrealengine4
 	```
 
 * 最终的效果，如图
-	！[](http://7xqxmb.com1.z0.glb.clouddn.com/blog/images/folder_list.png)
 
-	！[](http://7xqxmb.com1.z0.glb.clouddn.com/blog/images/log_detail.png)
+	![](http://7xqxmb.com1.z0.glb.clouddn.com/blog/images/folder_list.png)
+
+	![](http://7xqxmb.com1.z0.glb.clouddn.com/blog/images/log_detail.png)
 
 * 如果想要使用虚幻默认的日志行为，则只需要禁用插件即可，不需要修改代码
