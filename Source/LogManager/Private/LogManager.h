@@ -21,7 +21,14 @@ public:
      * @param Category - category name
      * @param ForceLogFlush - flush log to file immediately 
      */
-    virtual void AddFilter(const FString& Category, bool ForceLogFlush) override;
+    virtual void AddFilter(const FString& Category, ELogVerbosity::Type FlushOn) override;
+
+	/**
+	 * @brief Change a log category's flush-on log level.
+	 * @param Category - category name
+	 * @param FlushOn - flush log to file immediately when log level >= FlushOn
+	 */
+	virtual void ChangeLogFlushOnLevel(const FString& Category, ELogVerbosity::Type FlushOn) override;
 
     /**
      * @brief Gets current absolute log directory.
@@ -29,9 +36,9 @@ public:
     virtual const FString& GetCurrentLogDir() const override;
 
     /**
-     * @brief Keeps the number of log folders to LogFolderNumber.
+     * @brief Remains the number of log folders to LogFolderCount.
      */
-    virtual void CleanLogFolder(int32 LogFolderNumber) override;
+    virtual void RemainsLogCount(int32 LogFolderCount) override;
 
     /**
      * @brief Removes a log filter from the list of filters.
@@ -80,6 +87,8 @@ protected:
 
     void CastAndSerializeData(FLogAsyncWriter* AsyncWriter, const TCHAR* Data);
 
+    static FString FormatLogLine(ELogVerbosity::Type Verbosity, const class FName& Category, const TCHAR* Message = nullptr, ELogTimes::Type LogTime = ELogTimes::None, const double Time = -1.0);
+
     void WriteDataToArchive(FLogAsyncWriter* AsyncWriter, const TCHAR* Data,
         ELogVerbosity::Type Verbosity, const double Time, const class FName& Category = TEXT(""));
 
@@ -90,7 +99,7 @@ private:
     {
         FString Category;
         FLogAsyncWriter* AsyncWriter;
-        bool ForceLogFlush;
+		ELogVerbosity::Type FlushOn;
 
         friend bool operator==(const FLogFilter& Lhs, const FLogFilter& Rhs)
         {
@@ -99,6 +108,6 @@ private:
     };
 
     FString CurrentLogDir;
+    FString DefaultLogFilename;
     TArray<FLogFilter> LogFilters;
-    FLogFilter DefaultFiter;
 };

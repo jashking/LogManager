@@ -2,6 +2,12 @@
 
 #include "LogManagerPrivatePCH.h"
 
+#include "GenericPlatform/GenericPlatformFile.h"
+#include "HAL/ExceptionHandling.h"
+#include "HAL/FileManager.h"
+#include "Misc/DateTime.h"
+#include "Misc/OutputDeviceRedirector.h"
+
 typedef uint8 UTF8BOMType[3];
 static UTF8BOMType UTF8BOM = { 0xEF, 0xBB, 0xBF };
 
@@ -23,17 +29,26 @@ FLogManager::FLogManager()
         GameLogDir = FPaths::GetPath(AbsoluteLogFilename).AppendChar(TEXT('/'));
     }
 
-    CurrentLogDir = FString::Printf(TEXT("%s%s %s"), *GameLogDir, *GameName, *SystemTime);
+    CurrentLogDir = IFileManager::Get().ConvertToAbsolutePathForExternalAppForWrite(
+        *FString::Printf(TEXT("%s%s %s"), *GameLogDir, *GameName, *SystemTime));
 
     // Adds default filter
-    const FString DefaultLogFilename =
+    DefaultLogFilename =
         FString::Printf(TEXT("%s/%s%s"), *CurrentLogDir,
             bHasLogFileName ? LogFilename : *GameName,
             bHasLogFileName ? TEXT("") : TEXT(".log"));
 
+    FLogFilter DefaultFiter;
     DefaultFiter.AsyncWriter = CreateAsyncWriter(DefaultLogFilename);
-    DefaultFiter.ForceLogFlush = FParse::Param(FCommandLine::Get(), TEXT("FORCELOGFLUSH"));;
+	DefaultFiter.FlushOn =
+		FParse::Param(FCommandLine::Get(), TEXT("FORCELOGFLUSH")) ? ELogVerbosity::All : ELogVerbosity::Warning;
     LogFilters.AddUnique(DefaultFiter);
+
+    if (!GUseCrashReportClient)
+    {
+        FCString::Strcpy(MiniDumpFilenameW,
+            *FString::Printf(TEXT("%s/%s"), *CurrentLogDir, *FPaths::GetCleanFilename(MiniDumpFilenameW)));
+    }
 }
 
 void FLogManager::StartupModule()
@@ -43,31 +58,47 @@ void FLogManager::StartupModule()
     {
         if (GLog)
         {
-            GLog->RemoveOutputDevice(FPlatformOutputDevices::GetLog());
+            FOutputDevice* OutputLog = FPlatformOutputDevices::GetLog();
+            GLog->RemoveOutputDevice(OutputLog);
+
+            if (OutputLog)
+            {
+                OutputLog->TearDown();
+            }
+
+            IFileManager::Get().Delete(*FPlatformOutputDevices::GetAbsoluteLogFilename(), false, true, true);
         }
 
         GLog->AddOutputDevice(this);
+        GLog->SerializeBacklog(this);
     }
 }
 
 
 void FLogManager::ShutdownModule()
 {
-    // This function may be called during shutdown to clean up your module.  For modules that support dynamic reloading,
-    // we call this function before unloading the module.
-    TearDown();
-
     if (GLog)
     {
         GLog->RemoveOutputDevice(this);
     }
+
+    // This function may be called during shutdown to clean up your module.  For modules that support dynamic reloading,
+    // we call this function before unloading the module.
+    TearDown();
+    
+    FOutputDeviceFile* OutputLogFile = static_cast<FOutputDeviceFile*>(FPlatformOutputDevices::GetLog());
+    if (OutputLogFile)
+    {
+        OutputLogFile->SetFilename(*DefaultLogFilename);
+        GLog->AddOutputDevice(OutputLogFile);
+    }
 }
 
-void FLogManager::AddFilter(const FString& Category, bool ForceLogFlush)
+void FLogManager::AddFilter(const FString& Category, ELogVerbosity::Type FlushOn)
 {
     if (!Category.IsEmpty())
     {
-        FLogFilter LogFilter{ Category, nullptr, ForceLogFlush };
+        FLogFilter LogFilter{ Category, nullptr, FlushOn };
 
         if (INDEX_NONE == LogFilters.Find(LogFilter))
         {
@@ -77,6 +108,17 @@ void FLogManager::AddFilter(const FString& Category, bool ForceLogFlush)
             LogFilters.AddUnique(LogFilter);
         }
     }
+}
+
+void FLogManager::ChangeLogFlushOnLevel(const FString& Category, ELogVerbosity::Type FlushOn)
+{
+	int32 FoundIndex = INDEX_NONE;
+	FLogFilter LogFilter{ Category, nullptr, ELogVerbosity::All };
+
+	if (LogFilters.Find(LogFilter, FoundIndex))
+	{
+		LogFilters[FoundIndex].FlushOn = FlushOn;
+	}
 }
 
 void FLogManager::RemoveFilter(const FString& Category)
@@ -99,10 +141,10 @@ const FString& FLogManager::GetCurrentLogDir() const
     return CurrentLogDir;
 }
 
-void FLogManager::CleanLogFolder(int32 LogFolderNumber)
+void FLogManager::RemainsLogCount(int32 LogFolderCount)
 {
     // Delete old log directory
-    if (LogFolderNumber >= 0)
+    if (LogFolderCount >= 0)
     {
         const FString GameLogDir = FPaths::GetPath(CurrentLogDir).AppendChar(TEXT('/'));
         const FString GameName = FCString::Strlen(FApp::GetGameName()) != 0 ? FApp::GetGameName() : TEXT("UE4");
@@ -137,9 +179,9 @@ void FLogManager::CleanLogFolder(int32 LogFolderNumber)
 
         IFileManager::Get().IterateDirectory(*GameLogDir, LogVisitor);
 
-        if (LogVisitor.LogFolders.Num() >= LogFolderNumber)
+        if (LogVisitor.LogFolders.Num() >= LogFolderCount)
         {
-            const int32 ExpiredFolderCount = LogVisitor.LogFolders.Num() - LogFolderNumber;
+            const int32 ExpiredFolderCount = LogVisitor.LogFolders.Num() - LogFolderCount;
             LogVisitor.LogFolders.Sort();
 
             for (int32 i = 0; i < ExpiredFolderCount; ++i)
@@ -175,8 +217,6 @@ void FLogManager::TearDown()
     }
 
     LogFilters.Empty();
-
-    DefaultFiter.AsyncWriter = nullptr;
 }
 
 void FLogManager::Flush()
@@ -198,22 +238,22 @@ void FLogManager::Serialize(const TCHAR* Data, ELogVerbosity::Type Verbosity,
     {
         if (Verbosity != ELogVerbosity::SetColor)
         {
-            FLogFilter LogFilter{ Category.ToString(), nullptr, false };
+            FLogFilter LogFilter{ Category.ToString(), nullptr, ELogVerbosity::All };
             int32 FoundIndex = INDEX_NONE;
 
             FLogAsyncWriter* AsyncWriter = nullptr;
-            bool ForceLogFlush = false;
+			ELogVerbosity::Type FlushOn = ELogVerbosity::Warning;
             bool bUseCategory = false;
 
             if (LogFilters.Find(LogFilter, FoundIndex))
             {
                 AsyncWriter = LogFilters[FoundIndex].AsyncWriter;
-                ForceLogFlush = LogFilters[FoundIndex].ForceLogFlush;
+				FlushOn = LogFilters[FoundIndex].FlushOn;
             }
-            else
+            else if (LogFilters.Num() > 0)
             {
-                AsyncWriter = DefaultFiter.AsyncWriter;
-                ForceLogFlush = DefaultFiter.ForceLogFlush;
+                AsyncWriter = LogFilters[0].AsyncWriter;
+				FlushOn = LogFilters[0].FlushOn;
                 bUseCategory = true;
             }
 
@@ -221,7 +261,7 @@ void FLogManager::Serialize(const TCHAR* Data, ELogVerbosity::Type Verbosity,
             {
                 WriteDataToArchive(AsyncWriter, Data, Verbosity, Time, bUseCategory ? Category : NAME_None);
 
-                if (ForceLogFlush)
+                if (Verbosity <= FlushOn)
                 {
                     AsyncWriter->Flush();
                 }
@@ -267,6 +307,46 @@ void FLogManager::CastAndSerializeData(FLogAsyncWriter* AsyncWriter, const TCHAR
     }
 }
 
+FString FLogManager::FormatLogLine(ELogVerbosity::Type Verbosity, const class FName& Category, const TCHAR* Message /*= nullptr*/, ELogTimes::Type LogTime /*= ELogTimes::None*/, const double Time /*= -1.0*/)
+{
+    const bool bShowCategory = GPrintLogCategory && Category != NAME_None;
+
+    FString Format = FString::Printf(TEXT("[%s][%3d]"), *FDateTime::Now().ToString(TEXT("%Y.%m.%d-%H.%M.%S:%s")), GFrameCounter % 1000);
+
+    if (bShowCategory)
+    {
+        if (Verbosity != ELogVerbosity::Log)
+        {
+            Format += Category.ToString();
+            Format += TEXT(":");
+            Format += FOutputDeviceHelper::VerbosityToString(Verbosity);
+            Format += TEXT(": ");
+        }
+        else
+        {
+            Format += Category.ToString();
+            Format += TEXT(": ");
+        }
+    }
+    else
+    {
+        if (Verbosity != ELogVerbosity::Log)
+        {
+#if !HACK_HEADER_GENERATOR
+            Format += FOutputDeviceHelper::VerbosityToString(Verbosity);
+            Format += TEXT(": ");
+#endif
+        }
+    }
+
+    if (Message)
+    {
+        Format += Message;
+    }
+
+    return Format;
+}
+
 void FLogManager::WriteDataToArchive(FLogAsyncWriter* AsyncWriter, const TCHAR* Data,
     ELogVerbosity::Type Verbosity, const double Time, const class FName& Category)
 {
@@ -276,7 +356,7 @@ void FLogManager::WriteDataToArchive(FLogAsyncWriter* AsyncWriter, const TCHAR* 
     const FString Message = FString::Printf(TEXT("%s%s"), Data, bAutoEmitLineTerminator ? LINE_TERMINATOR : TEXT(""));
 #endif // PLATFORM_LINUX
 
-    const FString LogLine = FOutputDevice::FormatLogLine(Verbosity, Category, *Message, GPrintLogTimes, Time);
+    const FString LogLine = FormatLogLine(Verbosity, Category, *Message, GPrintLogTimes, Time);
     CastAndSerializeData(AsyncWriter, *LogLine);
 }
 

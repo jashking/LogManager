@@ -38,9 +38,16 @@ public:
     /**
      * @brief Adds a log filter to the list of filters.
      * @param Category - category name
-     * @param ForceLogFlush - flush log to file immediately
+     * @param FlushOn - flush log to file immediately when log level >= FlushOn
      */
-    virtual void AddFilter(const FString& Category, bool ForceLogFlush) = 0;
+    virtual void AddFilter(const FString& Category, ELogVerbosity::Type FlushOn) = 0;
+
+	/**
+	 * @brief Change a log category's flush-on log level.
+	 * @param Category - category name
+	 * @param FlushOn - flush log to file immediately when log level >= FlushOn
+	 */
+	virtual void ChangeLogFlushOnLevel(const FString& Category, ELogVerbosity::Type FlushOn) = 0;
 
     /**
      * @brief Gets current absolute log directory.
@@ -48,8 +55,8 @@ public:
     virtual const FString& GetCurrentLogDir() const = 0;
 
     /**
-     * @brief Keeps the number of log folders to LogFolderNumber.
+     * @brief Remains the number of log folders to LogFolderCount.
      */
-    virtual void CleanLogFolder(int32 LogFolderNumber) = 0;
+    virtual void RemainsLogCount(int32 LogFolderCount) = 0;
 };
 
