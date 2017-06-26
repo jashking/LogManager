@@ -4,8 +4,8 @@ namespace UnrealBuildTool.Rules
 {
 	public class LogManager : ModuleRules
 	{
-		public LogManager(TargetInfo Target)
-		{
+		public LogManager(ReadOnlyTargetRules Target) : base(Target)
+        {
 			PublicIncludePaths.AddRange(
 				new string[] {
 					// ... add public include paths required here ...

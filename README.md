@@ -37,7 +37,7 @@ A plugin to manage logs for Unrealengine4
 	if (ILogManager::IsAvailable())
     {
 		// 保留最近的5个日志文件夹
-        ILogManager::Get().CleanLogFolder(5);
+        ILogManager::Get().Remains(5);
 
 		// 将LogPluginTest分类的log输出到单独的文件夹中
         ILogManager::Get().AddFilter(LogPluginTest.GetCategoryName().ToString(), true);

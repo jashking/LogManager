@@ -102,7 +102,7 @@ void FLogManager::AddFilter(const FString& Category, ELogVerbosity::Type FlushOn
 
         if (INDEX_NONE == LogFilters.Find(LogFilter))
         {
-            const FString Filename = FString::Printf(TEXT("%s/Filter%s.log"), *CurrentLogDir, *Category);
+            const FString Filename = FString::Printf(TEXT("%s/%s.log"), *CurrentLogDir, *Category);
             
             LogFilter.AsyncWriter = CreateAsyncWriter(Filename);
             LogFilters.AddUnique(LogFilter);
